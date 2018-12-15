@@ -1,0 +1,106 @@
+---
+- hosts: all
+
+  vars:
+    tilemill:
+      ip: 127.0.0.1
+
+  tasks:
+
+  - name: Install common packages
+    apt: name={{ item }} state=latest update_cache=yes
+    with_items:
+      - autoconf
+      - curl
+      - fonts-noto-cjk
+      - fonts-noto-hinted
+      - fonts-noto-unhinted
+      - gdal-bin
+      - git
+      - jq
+      - libmapnik-dev
+      - libtool
+      - mapnik-utils
+      - osm2pgsql
+      - postgis
+      - postgresql
+      - postgresql-9.5-postgis-2.2
+      - postgresql-contrib
+      - python-pip
+      - python-psycopg2
+      - ruby
+      - ttf-unifont
+      - unzip
+      - monit
+
+  # Node.js
+  - name: Download Node.js PPM
+    get_url:
+      url: https://deb.nodesource.com/setup_6.x
+      dest: /tmp/setup.sh
+      mode: 0440
+  - name: Install Node.js PPM
+    shell: bash /tmp/setup.sh
+  - name: Install Node.js
+    apt: name=nodejs state=latest
+  - name: Install npm packages
+    npm:
+      name: "{{ item }}"
+      global: yes
+      executable: /usr/bin/npm
+    with_items:
+      - carto
+      - pm2
+
+  # Setup PostgreSQL
+  - name: Make sure PostgreSQL is running
+    action: service name=postgresql state=started enabled=true
+
+  - name: "Create a user `ubuntu` for PostgreSQL"
+    become: yes
+    become_user: postgres
+    postgresql_user:
+      name: "ubuntu"
+      password: "ubuntu"
+
+  # tilemill
+  - name: Clone the TilMill
+    git:
+      repo: https://github.com/tilemill-project/tilemill.git
+      dest: /usr/local/src/tilemill
+
+  - name: Install dependencies for the TilMill
+    shell: npm install
+    args:
+      chdir: /usr/local/src/tilemill
+
+  - name: Create `/home/ubuntu/.tilemill`
+    become: yes
+    become_user: ubuntu
+    file:
+      path: "/home/ubuntu/.tilemill"
+      state: directory
+
+  - name: Place the config for the TileMill
+    become: yes
+    become_user: ubuntu
+    template:
+      src: templates/tilemill.json
+      dest: "/home/ubuntu/.tilemill/config.json"
+
+  - name: Start Tilemill as a server
+    become: yes
+    become_user: ubuntu
+    shell: "pm2 -f --name=tilemill start index.js"
+    args:
+      chdir: /usr/local/src/tilemill
+
+  - name: Setup monit for PostgreSQL
+    template:
+      src: templates/postgresql.monit
+      dest: "/etc/monit/conf.d/postgresql"
+
+  - name: Setup monit for TileMill
+    template:
+      src: templates/pm2.monit
+      dest: "/etc/monit/conf.d/pm2"

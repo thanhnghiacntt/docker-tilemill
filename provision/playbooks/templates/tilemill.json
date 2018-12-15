@@ -1,0 +1,7 @@
+{
+  "files": "/home/ubuntu/tilemill",
+  "listenHost": "0.0.0.0",
+  "coreUrl": "{{ tilemill.ip }}:20009",
+  "tileUrl": "{{ tilemill.ip }}:20008",
+  "server": true
+}
